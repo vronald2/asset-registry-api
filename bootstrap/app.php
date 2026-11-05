@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Exceptions\ApiException;
 use App\Exceptions\ApiExceptionRenderer;
 use App\Http\Middleware\AssignRequestId;
+use App\Http\Middleware\LogApiTraffic;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -19,8 +20,12 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        // Global and outermost, so even early failures (404, 405, 413, maintenance) get a request id.
-        $middleware->prepend(AssignRequestId::class);
+        // Global and outermost, so even early failures (404, 405, 413, maintenance) get a request id
+        // and are logged. The traffic logger only stores the paths configured in config/api.php.
+        $middleware->prepend([
+            AssignRequestId::class,
+            LogApiTraffic::class,
+        ]);
 
         $middleware->throttleApi();
     })

@@ -38,6 +38,7 @@ return [
             - Updates use `PUT` and replace the whole representation: omitted optional fields are cleared.
             - Every response has an `X-Request-Id` header. A well-formed incoming `X-Request-Id` is reused.
             - Requests are rate limited per client IP address (`429 too_many_requests`).
+            - Every request and response is logged (sensitive values masked) under its request id.
 
             ## Errors
 

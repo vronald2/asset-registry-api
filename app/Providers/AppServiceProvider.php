@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Logging\ApiTraffic\ApiTrafficLogger;
+use App\Logging\ApiTraffic\DatabaseApiTrafficLogger;
 use Carbon\CarbonImmutable;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
@@ -16,6 +18,13 @@ use Illuminate\Support\ServiceProvider;
 
 final class AppServiceProvider extends ServiceProvider
 {
+    /**
+     * @var array<class-string, class-string>
+     */
+    public array $bindings = [
+        ApiTrafficLogger::class => DatabaseApiTrafficLogger::class,
+    ];
+
     public function boot(): void
     {
         Date::use(CarbonImmutable::class);

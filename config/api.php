@@ -33,6 +33,48 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Traffic logging
+    |--------------------------------------------------------------------------
+    |
+    | Every request matching one of the path patterns is stored, together with its response,
+    | in the `api_request_logs` table. Values of the listed keys (request/response body fields,
+    | query parameters and headers, case-insensitive) are masked before they are stored.
+    |
+    */
+
+    'logging' => [
+        'enabled' => (bool) env('API_LOGGING_ENABLED', true),
+
+        'paths' => ['api/*'],
+
+        'masked_keys' => [
+            'authorization',
+            'proxy-authorization',
+            'cookie',
+            'set-cookie',
+            'x-api-key',
+            'x-xsrf-token',
+            'password',
+            'password_confirmation',
+            'current_password',
+            'secret',
+            'token',
+            'access_token',
+            'refresh_token',
+            'api_key',
+        ],
+
+        'mask' => '********',
+
+        // Request and response bodies longer than this (in characters) are truncated.
+        'max_body_length' => 65_535,
+
+        // Entries older than this are removed by `php artisan model:prune`.
+        'retention_days' => (int) env('API_LOGGING_RETENTION_DAYS', 30),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | API documentation
     |--------------------------------------------------------------------------
     |

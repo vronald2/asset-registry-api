@@ -2,4 +2,7 @@
 
 declare(strict_types=1);
 
-// Console commands and scheduled tasks.
+use Illuminate\Support\Facades\Schedule;
+
+// Removes API traffic log entries older than the retention period (config/api.php).
+Schedule::command('model:prune')->daily();
