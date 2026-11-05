@@ -1,0 +1,3 @@
+# The image only needs the PHP configuration; the source code is bind-mounted at runtime.
+*
+!docker/php/

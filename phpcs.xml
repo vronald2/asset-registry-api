@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<ruleset name="Asset Registry API">
+    <description>PSR-12 coding standard (which includes PSR-1).</description>
+
+    <file>app</file>
+    <file>bootstrap/app.php</file>
+    <file>config</file>
+    <file>database</file>
+    <file>public/index.php</file>
+    <file>routes</file>
+    <file>tests</file>
+
+    <arg name="extensions" value="php"/>
+    <arg name="colors"/>
+    <arg name="parallel" value="8"/>
+    <arg value="sp"/>
+
+    <rule ref="PSR12"/>
+
+    <!-- The front controller defines LARAVEL_START and boots the app by design. -->
+    <rule ref="PSR1.Files.SideEffects">
+        <exclude-pattern>public/index.php</exclude-pattern>
+    </rule>
+</ruleset>

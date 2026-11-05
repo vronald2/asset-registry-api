@@ -1,0 +1,103 @@
+{
+    "$schema": "https://getcomposer.org/schema.json",
+    "name": "aronveres/asset-registry-api",
+    "type": "project",
+    "description": "Asset registry REST API: devices, contracts and their serial-numbered assignments.",
+    "keywords": ["laravel", "rest-api", "openapi", "asset-registry"],
+    "license": "MIT",
+    "require": {
+        "php": "^8.5",
+        "dedoc/scramble": "^0.13.53",
+        "laravel/framework": "^13.40",
+        "laravel/tinker": "^3.0"
+    },
+    "require-dev": {
+        "fakerphp/faker": "^1.23",
+        "larastan/larastan": "^3.14",
+        "laravel/pint": "^1.27",
+        "mockery/mockery": "^1.6",
+        "nunomaduro/collision": "^8.6",
+        "phpunit/phpunit": "^12.5.12",
+        "squizlabs/php_codesniffer": "^4.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "app/",
+            "Database\\Factories\\": "database/factories/",
+            "Database\\Seeders\\": "database/seeders/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "setup": [
+            "composer install",
+            "@php -r \"file_exists('.env') || copy('.env.example', '.env');\"",
+            "@php artisan key:generate",
+            "@php artisan migrate --seed --force"
+        ],
+        "test": [
+            "@php artisan config:clear --ansi @no_additional_args",
+            "@php artisan test"
+        ],
+        "lint": [
+            "pint --test",
+            "phpcs"
+        ],
+        "fix": [
+            "pint"
+        ],
+        "analyse": [
+            "phpstan analyse --memory-limit=1G"
+        ],
+        "check": [
+            "@composer validate --strict",
+            "@composer dump-autoload --strict-psr",
+            "@lint",
+            "@analyse",
+            "@test"
+        ],
+        "docs:export": [
+            "@php artisan scramble:export --path=docs/openapi.json"
+        ],
+        "post-autoload-dump": [
+            "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
+            "@php artisan package:discover --ansi"
+        ],
+        "post-update-cmd": [
+            "@php artisan vendor:publish --tag=laravel-assets --ansi --force"
+        ],
+        "post-root-package-install": [
+            "@php -r \"file_exists('.env') || copy('.env.example', '.env');\""
+        ],
+        "pre-package-uninstall": [
+            "Illuminate\\Foundation\\ComposerScripts::prePackageUninstall"
+        ]
+    },
+    "scripts-descriptions": {
+        "setup": "Install dependencies, create .env, generate the app key, run migrations and seed demo data.",
+        "lint": "Check coding style (Pint with PSR-12 preset, PHP_CodeSniffer PSR-12).",
+        "fix": "Fix coding style with Pint.",
+        "analyse": "Run static analysis (Larastan).",
+        "check": "Run every quality gate: composer validation, PSR-4, coding style, static analysis, tests.",
+        "docs:export": "Export the generated OpenAPI specification to docs/openapi.json."
+    },
+    "extra": {
+        "laravel": {
+            "dont-discover": []
+        }
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "preferred-install": "dist",
+        "sort-packages": true,
+        "allow-plugins": {
+            "php-http/discovery": true
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
