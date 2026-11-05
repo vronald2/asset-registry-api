@@ -31,4 +31,19 @@ return [
         'per_minute' => (int) env('API_RATE_LIMIT_PER_MINUTE', 120),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | API documentation
+    |--------------------------------------------------------------------------
+    |
+    | HTTP Basic Auth credentials of the OpenAPI documentation. While either value is empty,
+    | access to the documentation is denied.
+    |
+    */
+
+    'docs' => [
+        'username' => (string) env('API_DOCS_USERNAME', ''),
+        'password' => (string) env('API_DOCS_PASSWORD', ''),
+    ],
+
 ];
