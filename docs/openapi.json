@@ -1,0 +1,1212 @@
+{
+    "openapi": "3.1.2",
+    "info": {
+        "title": "Asset Registry API",
+        "version": "1.0.0",
+        "description": "REST API of an asset registry: **device types**, **contracts**, and the serial-numbered\n**device units** on the contracts.\n\nA device type can be on several contracts (and several times on one contract), but every\nunit has its own serial number. A unit (device type + serial number) can be on one contract\nat a time.\n\n## Conventions\n\n- Successful responses wrap the payload in `data`. Lists are paginated (`page`, `per_page`\n  up to 100) and also return `links` and `meta`.\n- Updates use `PUT` and replace the whole representation: omitted optional fields are cleared.\n- Every response has an `X-Request-Id` header. A well-formed incoming `X-Request-Id` is reused.\n- Requests are rate limited per client IP address (`429 too_many_requests`).\n- Every request and response is logged (sensitive values masked) under its request id.\n\n## Errors\n\nEvery error has the same format; `errors` is present for validation errors only:\n\n```json\n{\n  \"message\": \"The given data was invalid.\",\n  \"code\": \"validation_failed\",\n  \"errors\": {\"serial_number\": [\"The serial number field is required.\"]},\n  \"request_id\": \"01a1ac12-ff5a-738b-b881-9d3dd96ca433\"\n}\n```\n\n| HTTP | `code` | Meaning |\n|------|--------|---------|\n| 404 | `resource_not_found` | The requested resource does not exist. |\n| 404 | `route_not_found` | The requested endpoint does not exist. |\n| 405 | `method_not_allowed` | The HTTP method is not supported by the endpoint (see the `Allow` header). |\n| 409 | `device_in_use` | The device is assigned to a contract, so it cannot be deleted. |\n| 409 | `serial_number_already_assigned` | The unit is already on a contract (concurrent requests). |\n| 409 | `conflict` | The request conflicts with the current state of a resource. |\n| 422 | `validation_failed` | The request data is invalid. |\n| 429 | `too_many_requests` | Rate limit exceeded (see the `Retry-After` header). |\n| 500 | `internal_server_error` | Unexpected error; report it with the `request_id`. |"
+    },
+    "servers": [
+        {
+            "url": "http://localhost:8080/api"
+        }
+    ],
+    "tags": [
+        {
+            "name": "Devices",
+            "description": "Device types: catalogue items that can be put on contracts with serial numbers."
+        },
+        {
+            "name": "Contracts",
+            "description": "Contracts. The detail view also lists the device units on the contract."
+        },
+        {
+            "name": "Contract devices",
+            "description": "Adding device units (with serial numbers) to contracts and removing them."
+        }
+    ],
+    "paths": {
+        "/v1/devices": {
+            "get": {
+                "operationId": "v1.devices.index",
+                "summary": "List devices",
+                "tags": [
+                    "Devices"
+                ],
+                "parameters": [
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1
+                        }
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 100
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Paginated set of `DeviceResource`",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/DeviceResource"
+                                            }
+                                        },
+                                        "links": {
+                                            "type": "object",
+                                            "properties": {
+                                                "first": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "last": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "prev": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "next": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                }
+                                            },
+                                            "required": [
+                                                "first",
+                                                "last",
+                                                "prev",
+                                                "next"
+                                            ]
+                                        },
+                                        "meta": {
+                                            "type": "object",
+                                            "properties": {
+                                                "current_page": {
+                                                    "type": "integer",
+                                                    "minimum": 1
+                                                },
+                                                "from": {
+                                                    "type": [
+                                                        "integer",
+                                                        "null"
+                                                    ],
+                                                    "minimum": 1
+                                                },
+                                                "last_page": {
+                                                    "type": "integer",
+                                                    "minimum": 1
+                                                },
+                                                "links": {
+                                                    "type": "array",
+                                                    "description": "Generated paginator links.",
+                                                    "items": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "url": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "label": {
+                                                                "type": "string"
+                                                            },
+                                                            "active": {
+                                                                "type": "boolean"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "url",
+                                                            "label",
+                                                            "active"
+                                                        ]
+                                                    }
+                                                },
+                                                "path": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ],
+                                                    "description": "Base path for paginator generated URLs."
+                                                },
+                                                "per_page": {
+                                                    "type": "integer",
+                                                    "description": "Number of items shown per page.",
+                                                    "minimum": 0
+                                                },
+                                                "to": {
+                                                    "type": [
+                                                        "integer",
+                                                        "null"
+                                                    ],
+                                                    "description": "Number of the last item in the slice.",
+                                                    "minimum": 1
+                                                },
+                                                "total": {
+                                                    "type": "integer",
+                                                    "description": "Total number of items being paginated.",
+                                                    "minimum": 0
+                                                }
+                                            },
+                                            "required": [
+                                                "current_page",
+                                                "from",
+                                                "last_page",
+                                                "links",
+                                                "path",
+                                                "per_page",
+                                                "to",
+                                                "total"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "data",
+                                        "links",
+                                        "meta"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
+                    }
+                }
+            },
+            "post": {
+                "operationId": "v1.devices.store",
+                "summary": "Create a device",
+                "tags": [
+                    "Devices"
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DeviceRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "`DeviceResource`",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/DeviceResource"
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
+                    }
+                }
+            }
+        },
+        "/v1/devices/{device}": {
+            "get": {
+                "operationId": "v1.devices.show",
+                "summary": "Get a device",
+                "tags": [
+                    "Devices"
+                ],
+                "parameters": [
+                    {
+                        "name": "device",
+                        "in": "path",
+                        "required": true,
+                        "description": "The device ID",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "`DeviceResource`",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/DeviceResource"
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/ModelNotFoundException"
+                    }
+                }
+            },
+            "put": {
+                "operationId": "v1.devices.update",
+                "description": "Replaces the whole representation: omitted optional fields are cleared.",
+                "summary": "Update a device",
+                "tags": [
+                    "Devices"
+                ],
+                "parameters": [
+                    {
+                        "name": "device",
+                        "in": "path",
+                        "required": true,
+                        "description": "The device ID",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DeviceRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "`DeviceResource`",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/DeviceResource"
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/ModelNotFoundException"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "v1.devices.destroy",
+                "description": "A device that is assigned to any contract cannot be deleted (`409 device_in_use`).",
+                "summary": "Delete a device",
+                "tags": [
+                    "Devices"
+                ],
+                "parameters": [
+                    {
+                        "name": "device",
+                        "in": "path",
+                        "required": true,
+                        "description": "The device ID",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No content"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/DeviceInUseException"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/ModelNotFoundException"
+                    }
+                }
+            }
+        },
+        "/v1/contracts": {
+            "get": {
+                "operationId": "v1.contracts.index",
+                "description": "The list does not contain the devices of the contracts; they are returned by the detail endpoint.",
+                "summary": "List contracts",
+                "tags": [
+                    "Contracts"
+                ],
+                "parameters": [
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1
+                        }
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 100
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Paginated set of `ContractResource`",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/ContractResource"
+                                            }
+                                        },
+                                        "links": {
+                                            "type": "object",
+                                            "properties": {
+                                                "first": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "last": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "prev": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "next": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                }
+                                            },
+                                            "required": [
+                                                "first",
+                                                "last",
+                                                "prev",
+                                                "next"
+                                            ]
+                                        },
+                                        "meta": {
+                                            "type": "object",
+                                            "properties": {
+                                                "current_page": {
+                                                    "type": "integer",
+                                                    "minimum": 1
+                                                },
+                                                "from": {
+                                                    "type": [
+                                                        "integer",
+                                                        "null"
+                                                    ],
+                                                    "minimum": 1
+                                                },
+                                                "last_page": {
+                                                    "type": "integer",
+                                                    "minimum": 1
+                                                },
+                                                "links": {
+                                                    "type": "array",
+                                                    "description": "Generated paginator links.",
+                                                    "items": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "url": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "label": {
+                                                                "type": "string"
+                                                            },
+                                                            "active": {
+                                                                "type": "boolean"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "url",
+                                                            "label",
+                                                            "active"
+                                                        ]
+                                                    }
+                                                },
+                                                "path": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ],
+                                                    "description": "Base path for paginator generated URLs."
+                                                },
+                                                "per_page": {
+                                                    "type": "integer",
+                                                    "description": "Number of items shown per page.",
+                                                    "minimum": 0
+                                                },
+                                                "to": {
+                                                    "type": [
+                                                        "integer",
+                                                        "null"
+                                                    ],
+                                                    "description": "Number of the last item in the slice.",
+                                                    "minimum": 1
+                                                },
+                                                "total": {
+                                                    "type": "integer",
+                                                    "description": "Total number of items being paginated.",
+                                                    "minimum": 0
+                                                }
+                                            },
+                                            "required": [
+                                                "current_page",
+                                                "from",
+                                                "last_page",
+                                                "links",
+                                                "path",
+                                                "per_page",
+                                                "to",
+                                                "total"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "data",
+                                        "links",
+                                        "meta"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
+                    }
+                }
+            },
+            "post": {
+                "operationId": "v1.contracts.store",
+                "summary": "Create a contract",
+                "tags": [
+                    "Contracts"
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ContractRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "`ContractResource`",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/ContractResource"
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
+                    }
+                }
+            }
+        },
+        "/v1/contracts/{contract}": {
+            "get": {
+                "operationId": "v1.contracts.show",
+                "description": "`devices` lists the units on the contract; the `id` of a unit is used to remove it from the contract.",
+                "summary": "Get a contract with its devices",
+                "tags": [
+                    "Contracts"
+                ],
+                "parameters": [
+                    {
+                        "name": "contract",
+                        "in": "path",
+                        "required": true,
+                        "description": "The contract ID",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "`ContractResource`",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "allOf": [
+                                                {
+                                                    "$ref": "#/components/schemas/ContractResource"
+                                                },
+                                                {
+                                                    "type": "object",
+                                                    "required": [
+                                                        "devices"
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/ModelNotFoundException"
+                    }
+                }
+            },
+            "put": {
+                "operationId": "v1.contracts.update",
+                "description": "Replaces the whole representation: omitted optional fields are cleared.",
+                "summary": "Update a contract",
+                "tags": [
+                    "Contracts"
+                ],
+                "parameters": [
+                    {
+                        "name": "contract",
+                        "in": "path",
+                        "required": true,
+                        "description": "The contract ID",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ContractRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "`ContractResource`",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/ContractResource"
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/ModelNotFoundException"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "v1.contracts.destroy",
+                "description": "The devices on the contract are removed from it; the device types themselves are kept.",
+                "summary": "Delete a contract",
+                "tags": [
+                    "Contracts"
+                ],
+                "parameters": [
+                    {
+                        "name": "contract",
+                        "in": "path",
+                        "required": true,
+                        "description": "The contract ID",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No content"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/ModelNotFoundException"
+                    }
+                }
+            }
+        },
+        "/v1/contracts/{contract}/devices": {
+            "post": {
+                "operationId": "v1.contracts.devices.store",
+                "description": "Puts one physical unit of a device type, identified by its serial number, on the contract.\nThe same device type can be on several contracts (and several times on one contract),\nbut every unit needs a different serial number.",
+                "summary": "Add a device to a contract",
+                "tags": [
+                    "Contract devices"
+                ],
+                "parameters": [
+                    {
+                        "name": "contract",
+                        "in": "path",
+                        "required": true,
+                        "description": "The contract ID",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AttachContractDeviceRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "`ContractDeviceResource`",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "allOf": [
+                                                {
+                                                    "$ref": "#/components/schemas/ContractDeviceResource"
+                                                },
+                                                {
+                                                    "type": "object",
+                                                    "required": [
+                                                        "device"
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/SerialNumberAlreadyAssignedException"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/ModelNotFoundException"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
+                    }
+                }
+            }
+        },
+        "/v1/contracts/{contract}/devices/{contractDevice}": {
+            "delete": {
+                "operationId": "v1.contracts.devices.destroy",
+                "description": "`contractDevice` is the `id` of the unit in the `devices` list of the contract. The binding is\nscoped to the contract: a unit of another contract is not found.",
+                "summary": "Remove a device from a contract",
+                "tags": [
+                    "Contract devices"
+                ],
+                "parameters": [
+                    {
+                        "name": "contract",
+                        "in": "path",
+                        "required": true,
+                        "description": "The contract ID",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "contractDevice",
+                        "in": "path",
+                        "required": true,
+                        "description": "The contract device ID",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No content"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/ModelNotFoundException"
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "AttachContractDeviceRequest": {
+                "type": "object",
+                "description": "A physical device unit to be added to a contract.",
+                "properties": {
+                    "device_id": {
+                        "type": "integer"
+                    },
+                    "serial_number": {
+                        "type": "string",
+                        "maxLength": 100
+                    }
+                },
+                "required": [
+                    "device_id",
+                    "serial_number"
+                ],
+                "title": "AttachContractDeviceRequest"
+            },
+            "ContractDeviceResource": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer"
+                    },
+                    "contract_id": {
+                        "type": "integer"
+                    },
+                    "serial_number": {
+                        "type": "string"
+                    },
+                    "device": {
+                        "$ref": "#/components/schemas/DeviceResource"
+                    },
+                    "assigned_at": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "date-time"
+                    }
+                },
+                "required": [
+                    "id",
+                    "contract_id",
+                    "serial_number",
+                    "assigned_at"
+                ],
+                "title": "ContractDeviceResource"
+            },
+            "ContractRequest": {
+                "type": "object",
+                "description": "Full representation of a contract, shared by create (POST) and full update (PUT).",
+                "properties": {
+                    "contract_number": {
+                        "type": "string",
+                        "maxLength": 50
+                    },
+                    "partner_name": {
+                        "type": "string",
+                        "maxLength": 255
+                    },
+                    "start_date": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "end_date": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "date"
+                    },
+                    "description": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "maxLength": 2000
+                    }
+                },
+                "required": [
+                    "contract_number",
+                    "partner_name",
+                    "start_date"
+                ],
+                "title": "ContractRequest"
+            },
+            "ContractResource": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer"
+                    },
+                    "contract_number": {
+                        "type": "string"
+                    },
+                    "partner_name": {
+                        "type": "string"
+                    },
+                    "start_date": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "end_date": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "date"
+                    },
+                    "description": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "devices": {
+                        "type": "array",
+                        "description": "Present only in the detailed view: the list endpoint does not load the line items.",
+                        "items": {
+                            "$ref": "#/components/schemas/ContractDeviceResource"
+                        }
+                    },
+                    "created_at": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "date-time"
+                    },
+                    "updated_at": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "date-time"
+                    }
+                },
+                "required": [
+                    "id",
+                    "contract_number",
+                    "partner_name",
+                    "start_date",
+                    "end_date",
+                    "description",
+                    "created_at",
+                    "updated_at"
+                ],
+                "title": "ContractResource"
+            },
+            "DeviceCategory": {
+                "type": "string",
+                "enum": [
+                    "laptop",
+                    "desktop",
+                    "monitor",
+                    "printer",
+                    "phone",
+                    "tablet",
+                    "network",
+                    "other"
+                ],
+                "title": "DeviceCategory"
+            },
+            "DeviceRequest": {
+                "type": "object",
+                "description": "Full representation of a device type, shared by create (POST) and full update (PUT).",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "maxLength": 255
+                    },
+                    "manufacturer": {
+                        "type": "string",
+                        "maxLength": 255
+                    },
+                    "category": {
+                        "$ref": "#/components/schemas/DeviceCategory"
+                    },
+                    "description": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "maxLength": 2000
+                    }
+                },
+                "required": [
+                    "name",
+                    "manufacturer",
+                    "category"
+                ],
+                "title": "DeviceRequest"
+            },
+            "DeviceResource": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "manufacturer": {
+                        "type": "string"
+                    },
+                    "category": {
+                        "$ref": "#/components/schemas/DeviceCategory"
+                    },
+                    "description": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "created_at": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "date-time"
+                    },
+                    "updated_at": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "date-time"
+                    }
+                },
+                "required": [
+                    "id",
+                    "name",
+                    "manufacturer",
+                    "category",
+                    "description",
+                    "created_at",
+                    "updated_at"
+                ],
+                "title": "DeviceResource"
+            }
+        },
+        "responses": {
+            "ValidationException": {
+                "description": "Validation error",
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "message": {
+                                    "type": "string",
+                                    "description": "Human-readable error message."
+                                },
+                                "code": {
+                                    "type": "string",
+                                    "description": "Machine-readable error code.",
+                                    "enum": [
+                                        "validation_failed"
+                                    ]
+                                },
+                                "errors": {
+                                    "type": "object",
+                                    "description": "The validation messages of each invalid field.",
+                                    "additionalProperties": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string"
+                                        }
+                                    }
+                                },
+                                "request_id": {
+                                    "type": "string",
+                                    "description": "Identifier of the request (also in the X-Request-Id header)."
+                                }
+                            },
+                            "required": [
+                                "message",
+                                "code",
+                                "errors",
+                                "request_id"
+                            ]
+                        }
+                    }
+                }
+            },
+            "ModelNotFoundException": {
+                "description": "Resource not found",
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "message": {
+                                    "type": "string",
+                                    "description": "Human-readable error message."
+                                },
+                                "code": {
+                                    "type": "string",
+                                    "description": "Machine-readable error code.",
+                                    "enum": [
+                                        "resource_not_found"
+                                    ]
+                                },
+                                "request_id": {
+                                    "type": "string",
+                                    "description": "Identifier of the request (also in the X-Request-Id header)."
+                                }
+                            },
+                            "required": [
+                                "message",
+                                "code",
+                                "request_id"
+                            ]
+                        }
+                    }
+                }
+            },
+            "DeviceInUseException": {
+                "description": "Device in use",
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "message": {
+                                    "type": "string",
+                                    "description": "Human-readable error message."
+                                },
+                                "code": {
+                                    "type": "string",
+                                    "description": "Machine-readable error code.",
+                                    "enum": [
+                                        "device_in_use"
+                                    ]
+                                },
+                                "request_id": {
+                                    "type": "string",
+                                    "description": "Identifier of the request (also in the X-Request-Id header)."
+                                }
+                            },
+                            "required": [
+                                "message",
+                                "code",
+                                "request_id"
+                            ]
+                        }
+                    }
+                }
+            },
+            "SerialNumberAlreadyAssignedException": {
+                "description": "Serial number already assigned",
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "message": {
+                                    "type": "string",
+                                    "description": "Human-readable error message."
+                                },
+                                "code": {
+                                    "type": "string",
+                                    "description": "Machine-readable error code.",
+                                    "enum": [
+                                        "serial_number_already_assigned"
+                                    ]
+                                },
+                                "request_id": {
+                                    "type": "string",
+                                    "description": "Identifier of the request (also in the X-Request-Id header)."
+                                }
+                            },
+                            "required": [
+                                "message",
+                                "code",
+                                "request_id"
+                            ]
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
