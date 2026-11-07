@@ -60,6 +60,9 @@ final readonly class ProblemDetails
     }
 
     /**
+     * The detail and the instance may echo raw request bytes, so invalid UTF-8 is replaced (U+FFFD) instead of
+     * making the encoding fail.
+     *
      * @param array<string, string|list<string>> $headers Extra headers, e.g. "Allow" of a 405 response.
      */
     public function toResponse(array $headers = []): JsonResponse
@@ -68,6 +71,7 @@ final readonly class ProblemDetails
             $this->toArray(),
             $this->status,
             [...$headers, 'Content-Type' => self::CONTENT_TYPE],
+            JSON_INVALID_UTF8_SUBSTITUTE,
         );
     }
 }

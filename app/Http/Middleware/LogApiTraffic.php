@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Middleware;
 
+use App\Http\RequestPath;
 use App\Logging\ApiTraffic\ApiTrafficEntryFactory;
 use App\Logging\ApiTraffic\ApiTrafficLogger;
 use Closure;
@@ -51,7 +52,7 @@ final readonly class LogApiTraffic
 
     public function terminate(Request $request, Response $response): void
     {
-        if (! $this->enabled || ! $request->is(...$this->paths)) {
+        if (! $this->enabled || ! RequestPath::matches($request, ...$this->paths)) {
             return;
         }
 

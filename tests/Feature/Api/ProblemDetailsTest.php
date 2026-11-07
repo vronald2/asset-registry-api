@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Api;
 
+use App\Models\ApiRequestLog;
 use App\Models\Contract;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Route;
@@ -33,6 +34,28 @@ final class ProblemDetailsTest extends TestCase
 
         $this->assertProblemDetails($response, 404);
         $response->assertJsonPath('instance', '/api/v1/unknown-resource');
+    }
+
+    public function testInvalidUtf8PathReturnsProblemDetailsAndIsLogged(): void
+    {
+        // Laravel's ValidatePathEncoding middleware rejects the URL before routing (400 "Malformed URL.").
+        $response = $this->get('/api/v1/%FF');
+
+        $this->assertProblemDetails($response, 400);
+        $response->assertJsonPath('detail', 'Malformed URL.');
+        $log = ApiRequestLog::query()->sole();
+        self::assertSame('/api/v1/%FF', $log->path);
+        self::assertSame(400, $log->response_status);
+    }
+
+    public function testRawInvalidByteInPathIsSubstitutedInTheResponse(): void
+    {
+        // A raw (not percent-encoded) byte reaches the instance member as it is: the encoding must not fail on it.
+        $response = $this->get("/api/v1/\xFF");
+
+        $this->assertProblemDetails($response, 400);
+        $response->assertJsonPath('instance', "/api/v1/\u{FFFD}");
+        self::assertSame('/api/v1/?', ApiRequestLog::query()->sole()->path);
     }
 
     public function testUnsupportedMethodReturnsProblemDetails(): void

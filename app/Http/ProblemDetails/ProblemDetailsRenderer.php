@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\ProblemDetails;
 
+use App\Http\RequestPath;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -22,7 +23,7 @@ final readonly class ProblemDetailsRenderer
     public function render(Throwable $exception, Request $request): ?JsonResponse
     {
         // An HttpResponseException already carries the response that has to be sent.
-        if (! $request->is('api', 'api/*') || $exception instanceof HttpResponseException) {
+        if (! RequestPath::matches($request, 'api', 'api/*') || $exception instanceof HttpResponseException) {
             return null;
         }
 
