@@ -41,7 +41,9 @@ return [
             '',
             'Every error is an [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) problem details document'
             . ' (`application/problem+json`) with the `type`, `title`, `status`, `detail` and `instance` members.'
-            . ' Validation errors (422) add `errors`, the messages by field.',
+            . ' Validation errors (422) add `errors`, the messages by field.'
+            . ' A malformed request gets 400: an invalid URL encoding, invalid UTF-8 in the input, or a JSON body that'
+            . ' is neither a JSON object nor empty.',
             '',
             '## Traffic log',
             '',

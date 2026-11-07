@@ -145,8 +145,9 @@ final class ApiTrafficLoggingTest extends TestCase
     {
         $body = '{"name":"x","password":"hunter2"';
 
+        // Rejected as malformed JSON (400); the log must not keep the unmasked body either.
         $this->call('POST', '/api/v1/devices', server: ['CONTENT_TYPE' => 'application/json'], content: $body)
-            ->assertUnprocessable();
+            ->assertBadRequest();
 
         $log = ApiRequestLog::query()->sole();
         self::assertSame(sprintf('[unparsable JSON body, %d bytes]', strlen($body)), $log->request_body);
