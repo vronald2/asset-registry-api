@@ -125,7 +125,8 @@ Szabályok:
 - A gyári szám és a szerződésszám egyedisége kis- és nagybetű-érzéketlen; a szövegek elejéről és végéről a szóközök
   levágódnak.
 - Szerződéshez rendelt eszköz nem törölhető (409); előbb le kell venni a szerződésekről.
-- Az útvonalakban az azonosítók csak számok lehetnek; minden más 404.
+- Az útvonalakban az azonosítók csak számok lehetnek; minden más 404 (a hibás kódolású URL 400, lásd a
+  hibatáblát).
 - A válaszokban a dátumok `YYYY-MM-DD`, az időbélyegek ISO 8601 formátumúak (UTC); a szerződés eszközeinél az
   `attached_at` a felvétel ideje.
 
@@ -245,7 +246,7 @@ Content-Type: application/problem+json
 
 | Státusz | Mikor |
 |---------|-------|
-| 400 | Hibás kódolású URL (`Malformed URL.`), vagy érvénytelen UTF-8 bájtsor egy query- vagy űrlapparaméterben |
+| 400 | Hibás kódolású URL (`Malformed URL.`); érvénytelen UTF-8 bájtsor egy query- vagy űrlapparaméterben; egy JSON típusú kérés törzse nem érvényes JSON (`The request body is not valid JSON.`), vagy se nem objektum, se nem üres (`The request body must be a JSON object.`; üresnek számít a csak whitespace, a `null` és a `[]`) |
 | 404 | Ismeretlen útvonal vagy azonosító; levétel olyan eszköznél, amely nincs a szerződésen |
 | 405 | Nem támogatott HTTP-metódus (`Allow` fejléccel) |
 | 409 | Szerződéshez rendelt eszköz törlése; már a szerződésen lévő eszköz ismételt felvétele |
@@ -284,8 +285,15 @@ ismeretlen útvonalra érkezők is. A dokumentáció és a health check nem napl
 - **Nem UTF-8 adatok:** bináris törzs helyett a `[non-UTF-8 body, N bytes]` jelölő kerül be; a fejlécekben, a
   query- és űrlapparaméterekben, az útvonalban és a user agentben az érvénytelen bájtsorozatok `?`-re cserélődnek.
   Így ezek a kérések is naplózhatók.
-- **Nem értelmezhető JSON:** ha a kérés JSON-ként érkezik, de a törzse nem érvényes JSON (így maszkolni sem lehet),
-  helyette a `[unparsable JSON body, N bytes]` jelölő kerül be, hogy egy benne lévő titok se kerüljön a naplóba.
+- **Nem maszkolható JSON:** a nem érvényes JSON-törzs helyett a `[unparsable JSON body, N bytes]`, a JSON-skalár
+  (pl. a kétszeresen kódolt JSON) helyett a `[JSON scalar body, N bytes]` jelölő kerül be. Ezeket nem lehet
+  maszkolni, így egy bennük lévő titok sem kerül a naplóba. JSON típusú kérésnél ezekre a válasz is 400, kivéve a
+  `null`-t, amely üres törzsnek számít.
+- **Más típusú törzsek:** a `{`-vel vagy `[`-vel kezdődő törzs a Content-Type-tól függetlenül JSON-ként kerül be:
+  maszkolva, vagy ha nem érvényes, a jelölővel. Ilyen például a `curl -d`-vel küldött JSON, amelyet a curl űrlapként
+  küld. Az űrlapmezők akkor kerülnek be (maszkolva), ha a törzs `név=érték` párokból áll. Minden más törzsből (pl.
+  `text/plain`, vagy űrlapként küldött egyéb szöveg) csak a mérete kerül be: `[unparsed body, N bytes]`, mert az
+  ilyen törzsben a titkok nem ismerhetők fel.
 - **Hibatűrés:** a sor a válasz elküldése után íródik, így nem lassítja a választ. Ha az írás nem sikerül, a hiba az
   alkalmazásnaplóba (`storage/logs/laravel.log`) kerül, a kliens válasza nem változik.
 
@@ -348,7 +356,8 @@ app/
 ├── Http/
 │   ├── Controllers/Api/V1/  Vékony controllerek: validált bemenet → szolgáltatás → resource
 │   ├── Middleware/          LogApiTraffic (forgalomnaplózás), RejectInvalidUtf8Input (400 érvénytelen
-│   │                        UTF-8 bemenetre), AuthenticateApiDocs (Basic Auth)
+│   │                        UTF-8 bemenetre), RejectMalformedJson (400 hibás JSON-törzsre),
+│   │                        AuthenticateApiDocs (Basic Auth)
 │   ├── ProblemDetails/      RFC 9457 hibaválaszok: értékobjektum, kivétel-leképezés, renderelés
 │   ├── Requests/Api/V1/     Validáció (FormRequest); közös PUT/PATCH-szemantika
 │   ├── Resources/Api/V1/    A JSON-válaszok alakja (API Resource)
@@ -360,10 +369,10 @@ app/
 └── Services/                Üzleti szabályok (közös, generikus EloquentCrudService alappal)
 ```
 
-Egy kérés útja: `route → bemenetszűrés (érvénytelen UTF-8: 400) → FormRequest (validáció) → controller → service
-(üzleti szabályok) → Eloquent → API Resource`. Minden kivétel a `ProblemDetailsRenderer`-en át lesz egységes
-hibaválasz. A forgalomnaplózó middleware a globális middleware-lánc elején áll, így az ismeretlen útvonalak és a
-hibaválaszok is eljutnak hozzá.
+Egy kérés útja: `route → bemenetszűrés (érvénytelen UTF-8, hibás JSON-törzs: 400) → FormRequest (validáció) →
+controller → service (üzleti szabályok) → Eloquent → API Resource`. Minden kivétel a `ProblemDetailsRenderer`-en át
+lesz egységes hibaválasz. A forgalomnaplózó middleware a globális middleware-lánc elején áll, így az ismeretlen
+útvonalak és a hibaválaszok is eljutnak hozzá.
 
 Tervezési elvek a kódban:
 
@@ -393,7 +402,8 @@ A minőségkapu a konténerben fut, ebben a sorrendben:
 Tesztek:
 
 - `tests/Feature/Api/V1/`: az eszköz-, a szerződés- és a felvétel/levétel-végpontok, a hibaágakkal együtt;
-- `tests/Feature/Api/`: az egységes hibaformátum, a forgalomnaplózás és az érvénytelen UTF-8 bemenet szűrése;
+- `tests/Feature/Api/`: az egységes hibaformátum, a forgalomnaplózás, valamint az érvénytelen UTF-8 bemenet és a
+  hibás JSON-törzs szűrése;
 - `tests/Feature/ApiDocumentationTest.php`: a Basic Auth és a generált OpenAPI-dokumentum;
 - `tests/Feature/Database/`: a migrációk (séma, indexek, idegen kulcsok, visszagörgetés) és a demo seeder;
 - `tests/Unit/`: a maszkolás és csonkolás, a kivételek Problem Details-leképezése, a hibaválasz kódolása és az
@@ -460,3 +470,12 @@ A második review apró megállapításait publikálás előtt egy külön lánc
 és [docs/review-fixes/PLAN.md](docs/review-fixes/PLAN.md). Egy ponton eltér tőlük a megvalósítás: az érvénytelen
 kódolású URL-re (pl. `/api/v1/%FF`) a válasz 400 („Malformed URL.”), nem 404, mert a Laravel `ValidatePathEncoding`
 middleware-je az ilyen URL-t már a routing előtt elutasítja. A válasz így is Problem Details, és a kérés naplózódik.
+
+Az ezután maradt két pontot egy harmadik lánc javította: a hibás JSON-törzs 400-at kap, és a rossz Content-Type-pal
+küldött törzsből sem kerülhet maszkolatlan titok a naplóba. Ennek dokumentumai:
+[docs/review-fixes-2/TASK.md](docs/review-fixes-2/TASK.md),
+[docs/review-fixes-2/REQUIREMENTS.md](docs/review-fixes-2/REQUIREMENTS.md) és
+[docs/review-fixes-2/PLAN.md](docs/review-fixes-2/PLAN.md). A lánc review-ja nyomán a megvalósítás két ponton
+szigorúbb a tervnél. A JSON-törzsnek objektumnak (vagy üresnek) kell lennie, így a kétszeresen kódolt JSON is 400-at
+kap. A naplózás pedig a JSON-t az első karaktere alapján ismeri fel, az űrlapmezőket csak valódi `név=érték` törzsből
+veszi át, és egy JSON-skalár törzs helyett is jelölőt tárol.
