@@ -63,7 +63,11 @@ final class PayloadSanitizerTest extends TestCase
 
     public function testStoresEmptyBodyAsNull(): void
     {
-        self::assertNull($this->sanitizer()->body(''));
+        $sanitizer = $this->sanitizer();
+
+        self::assertNull($sanitizer->body(''));
+        // Like in Laravel, a body of only whitespace counts as empty.
+        self::assertNull($sanitizer->body(" \n", expectJson: true));
     }
 
     public function testTruncatesOversizedBodiesWithMarker(): void
@@ -106,6 +110,42 @@ final class PayloadSanitizerTest extends TestCase
         );
         // Without the JSON expectation a plain text body is kept as it is.
         self::assertSame('plain text body', $sanitizer->body('plain text body'));
+    }
+
+    public function testReplacesJsonScalarWithMarker(): void
+    {
+        $sanitizer = $this->sanitizer();
+
+        // A scalar has no keys to recognize a secret by, e.g. in double-encoded JSON.
+        self::assertSame(
+            '[JSON scalar body, 28 bytes]',
+            $sanitizer->body('"{\"password\":\"hunter2\"}"', expectJson: true),
+        );
+        self::assertSame('[JSON scalar body, 3 bytes]', $sanitizer->body('123', expectJson: true));
+        // Without the JSON expectation (a response body) the content is kept.
+        self::assertSame('"text"', $sanitizer->body('"text"'));
+    }
+
+    public function testFormBodyIsMaskedScrubbedAndTruncated(): void
+    {
+        self::assertSame(
+            '{"name":"Laptop?","password":"***"}',
+            $this->sanitizer()->formBody(['name' => "Laptop\xFF", 'password' => 'secret']),
+        );
+
+        $truncated = $this->sanitizer(maxBodyBytes: 60)->formBody(['description' => str_repeat('a', 200)]);
+
+        self::assertLessThanOrEqual(60, strlen($truncated));
+        self::assertStringContainsString('[truncated,', $truncated);
+    }
+
+    public function testOpaqueBodyKeepsOnlyTheSize(): void
+    {
+        $sanitizer = $this->sanitizer();
+
+        self::assertNull($sanitizer->opaqueBody(''));
+        self::assertSame('[unparsed body, 16 bytes]', $sanitizer->opaqueBody('password=hunter2'));
+        self::assertSame('[non-UTF-8 body, 2 bytes]', $sanitizer->opaqueBody("\xFF\xFE"));
     }
 
     public function testReplacesNonUtf8BodyWithMarker(): void

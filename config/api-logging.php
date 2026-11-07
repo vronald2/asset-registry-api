@@ -17,7 +17,7 @@ return [
 
     'enabled' => (bool) env('API_LOG_ENABLED', true),
 
-    // Request::is() patterns of the logged requests.
+    // Str::is() patterns of the logged requests, matched by App\Http\RequestPath (paths with invalid UTF-8 included).
     'paths' => ['api', 'api/*'],
 
     // Larger bodies are truncated before they are stored; a marker shows the original size.

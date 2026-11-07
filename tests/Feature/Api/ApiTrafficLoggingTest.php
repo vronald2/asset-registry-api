@@ -154,6 +154,95 @@ final class ApiTrafficLoggingTest extends TestCase
         self::assertStringNotContainsString('hunter2', (string) json_encode($log->getAttributes()));
     }
 
+    public function testJsonSentAsFormIsLoggedMasked(): void
+    {
+        // "curl -d" sends JSON as application/x-www-form-urlencoded: PHP reads the whole body as one form key.
+        $body = '{"name":"Laptop","password":"hunter2"}';
+
+        $this->call(
+            'POST',
+            '/api/v1/devices',
+            [$body => ''],
+            server: ['CONTENT_TYPE' => 'application/x-www-form-urlencoded'],
+            content: $body,
+        )->assertUnprocessable();
+
+        $log = ApiRequestLog::query()->sole();
+        self::assertSame('{"name":"Laptop","password":"***"}', $log->request_body);
+        self::assertStringNotContainsString('hunter2', (string) json_encode($log->getAttributes()));
+    }
+
+    /**
+     * The form fields are given the way PHP parses such a body: the whole text becomes one field name, with its
+     * spaces turned into underscores.
+     *
+     * @return iterable<string, array{string, array<string, string>, string}>
+     */
+    public static function bodiesSentAsForm(): iterable
+    {
+        $invalidJson = '{"name":"Laptop","password":"hunter2",}';
+
+        yield 'invalid JSON' => [$invalidJson, [$invalidJson => ''], '[unparsable JSON body, 39 bytes]'];
+        yield 'text without name=value pairs' => [
+            'password: hunter2',
+            ['password:_hunter2' => ''],
+            '[unparsed body, 17 bytes]',
+        ];
+    }
+
+    /**
+     * @param array<string, string> $parsedFields
+     */
+    #[DataProvider('bodiesSentAsForm')]
+    public function testBodySentAsFormDoesNotLeakSecrets(string $body, array $parsedFields, string $expected): void
+    {
+        $this->call(
+            'POST',
+            '/api/v1/devices',
+            $parsedFields,
+            server: ['CONTENT_TYPE' => 'application/x-www-form-urlencoded'],
+            content: $body,
+        )->assertUnprocessable();
+
+        $log = ApiRequestLog::query()->sole();
+        self::assertSame($expected, $log->request_body);
+        self::assertStringNotContainsString('hunter2', (string) json_encode($log->getAttributes()));
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function unparsedTextBodies(): iterable
+    {
+        yield 'name=value text' => ['password=hunter2', '[unparsed body, 16 bytes]'];
+        // Valid JSON, but a string has no keys to recognize a secret by.
+        yield 'JSON string' => ['"password=hunter2"', '[unparsed body, 18 bytes]'];
+    }
+
+    #[DataProvider('unparsedTextBodies')]
+    public function testUnparsedTextBodyIsLoggedBySizeOnly(string $body, string $expected): void
+    {
+        $this->call('POST', '/api/v1/devices', server: ['CONTENT_TYPE' => 'text/plain'], content: $body)
+            ->assertUnprocessable();
+
+        $log = ApiRequestLog::query()->sole();
+        self::assertSame($expected, $log->request_body);
+        self::assertStringNotContainsString('hunter2', (string) json_encode($log->getAttributes()));
+    }
+
+    public function testJsonScalarBodyIsReplacedWithMarker(): void
+    {
+        // Double-encoded JSON is a valid JSON string: rejected as not an object (400), and not logged as it is either.
+        $body = '"{\"name\":\"Laptop\",\"password\":\"hunter2\"}"';
+
+        $this->call('POST', '/api/v1/devices', server: ['CONTENT_TYPE' => 'application/json'], content: $body)
+            ->assertBadRequest();
+
+        $log = ApiRequestLog::query()->sole();
+        self::assertSame(sprintf('[JSON scalar body, %d bytes]', strlen($body)), $log->request_body);
+        self::assertStringNotContainsString('hunter2', (string) json_encode($log->getAttributes()));
+    }
+
     public function testOversizedBodyIsTruncated(): void
     {
         config(['api-logging.max_body_bytes' => 200]);

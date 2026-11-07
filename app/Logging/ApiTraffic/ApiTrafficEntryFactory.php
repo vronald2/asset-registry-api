@@ -55,21 +55,50 @@ final readonly class ApiTrafficEntryFactory
         return $route instanceof Route ? mb_substr('/' . $route->uri(), 0, self::MAX_ROUTE_LENGTH) : null;
     }
 
+    /**
+     * Only content whose secrets can be recognized is stored: JSON and form fields, both masked. Any other body is
+     * reduced to its size.
+     */
     private function requestBody(Request $request): ?string
     {
-        $isJson = $request->isJson();
+        $content = $request->getContent();
 
-        // A form submission is logged by its parsed fields, so that the sensitive ones can be masked too. They are
-        // sanitized before encoding: json_encode() would fail on invalid UTF-8.
-        $formFields = $isJson ? [] : $request->request->all();
-
-        if ($formFields !== []) {
-            return $this->sanitizer->body(
-                (string) json_encode($this->sanitizer->data($formFields), JSON_UNESCAPED_UNICODE),
-            );
+        // JSON is also recognized by its first character, whatever the Content-Type: "curl -d" sends it as a form,
+        // and PHP reads the whole body, secrets included, as one form key. Invalid JSON is replaced by a marker.
+        if ($request->isJson() || $this->startsLikeJson($content)) {
+            return $this->sanitizer->body($content, expectJson: true);
         }
 
-        return $this->sanitizer->body($request->getContent(), expectJson: $isJson);
+        $formFields = $request->request->all();
+
+        if ($formFields !== [] && $this->isFormEncoded($content)) {
+            return $this->sanitizer->formBody($formFields);
+        }
+
+        return $this->sanitizer->opaqueBody($content);
+    }
+
+    private function startsLikeJson(string $content): bool
+    {
+        $content = ltrim($content);
+
+        return str_starts_with($content, '{') || str_starts_with($content, '[');
+    }
+
+    /**
+     * Whether every pair of the raw body has the name=value form. PHP also reads other text sent as a form (e.g.
+     * "password: secret") as a field name, which would reach the log unmasked. A multipart body has no raw content
+     * here: PHP has already parsed it.
+     */
+    private function isFormEncoded(string $content): bool
+    {
+        foreach (explode('&', $content) as $pair) {
+            if ($pair !== '' && ! str_contains($pair, '=')) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private function responseBody(Response $response): ?string

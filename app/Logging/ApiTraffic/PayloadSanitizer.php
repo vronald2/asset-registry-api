@@ -12,6 +12,8 @@ use Illuminate\Container\Attributes\Config;
  */
 final readonly class PayloadSanitizer
 {
+    private const int JSON_FLAGS = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES;
+
     /** @var list<string> */
     private array $maskedHeaders;
 
@@ -80,22 +82,23 @@ final readonly class PayloadSanitizer
     }
 
     /**
-     * Prepares a body for storage: a JSON body is masked (and re-encoded only if something was masked),
-     * every body is truncated to the configured size. A binary (non-UTF-8) body, and a body that should be JSON but
-     * cannot be parsed (so it cannot be masked either), is replaced by a marker.
+     * Prepares a body for storage: a JSON body is masked (and re-encoded only if something was masked), every body
+     * is truncated to the configured size, and a body of only whitespace counts as empty, like in Laravel.
+     * A binary (non-UTF-8) body is replaced by a marker. So is a body that should be JSON but cannot be masked: one
+     * that cannot be parsed, and a scalar (e.g. double-encoded JSON), which has no keys to recognize secrets by.
      */
     public function body(string $content, bool $expectJson = false): ?string
     {
-        if ($content === '') {
+        if (trim($content) === '') {
             return null;
         }
 
         if (! mb_check_encoding($content, 'UTF-8')) {
-            return sprintf('[non-UTF-8 body, %d bytes]', strlen($content));
+            return $this->marker('non-UTF-8', $content);
         }
 
         if ($expectJson && ! json_validate($content)) {
-            return sprintf('[unparsable JSON body, %d bytes]', strlen($content));
+            return $this->marker('unparsable JSON', $content);
         }
 
         $decoded = json_decode($content, true);
@@ -104,11 +107,36 @@ final readonly class PayloadSanitizer
             $masked = $this->data($decoded);
 
             if ($masked !== $decoded) {
-                $content = (string) json_encode($masked, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                $content = (string) json_encode($masked, self::JSON_FLAGS);
             }
+        } elseif ($expectJson) {
+            return $this->marker('JSON scalar', $content);
         }
 
         return $this->truncate($content);
+    }
+
+    /**
+     * Encodes parsed form fields for storage in one pass: masked and made valid UTF-8 first, then truncated.
+     *
+     * @param array<array-key, mixed> $fields
+     */
+    public function formBody(array $fields): string
+    {
+        return $this->truncate((string) json_encode($this->data($fields), self::JSON_FLAGS));
+    }
+
+    /**
+     * A body that is neither JSON nor form data (e.g. text/plain): its secrets cannot be recognized, so only its size
+     * is stored.
+     */
+    public function opaqueBody(string $content): ?string
+    {
+        if ($content === '') {
+            return null;
+        }
+
+        return $this->marker(mb_check_encoding($content, 'UTF-8') ? 'unparsed' : 'non-UTF-8', $content);
     }
 
     /**
@@ -133,6 +161,14 @@ final readonly class PayloadSanitizer
     public function text(string $value): string
     {
         return mb_check_encoding($value, 'UTF-8') ? $value : mb_scrub($value, 'UTF-8');
+    }
+
+    /**
+     * The value stored instead of a body that cannot be stored safely, e.g. "[unparsed body, 16 bytes]".
+     */
+    private function marker(string $kind, string $content): string
+    {
+        return sprintf('[%s body, %d bytes]', $kind, strlen($content));
     }
 
     private function isSensitiveField(string $key): bool

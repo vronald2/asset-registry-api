@@ -26,7 +26,8 @@ final readonly class LogApiTraffic
     private const string STARTED_AT = 'api_traffic_log.started_at';
 
     /**
-     * @param list<string> $paths Request::is() patterns of the logged requests.
+     * @param list<string> $paths Str::is() patterns of the logged requests, matched by App\Http\RequestPath (paths
+     *                            with invalid UTF-8 included).
      */
     public function __construct(
         private ApiTrafficEntryFactory $entries,
