@@ -245,6 +245,7 @@ Content-Type: application/problem+json
 
 | Státusz | Mikor |
 |---------|-------|
+| 400 | Hibás kódolású URL (`Malformed URL.`), vagy érvénytelen UTF-8 bájtsor egy query- vagy űrlapparaméterben |
 | 404 | Ismeretlen útvonal vagy azonosító; levétel olyan eszköznél, amely nincs a szerződésen |
 | 405 | Nem támogatott HTTP-metódus (`Allow` fejléccel) |
 | 409 | Szerződéshez rendelt eszköz törlése; már a szerződésen lévő eszköz ismételt felvétele |
@@ -262,7 +263,7 @@ ismeretlen útvonalra érkezők is. A dokumentáció és a health check nem napl
 
 | Oszlop | Tartalom |
 |--------|----------|
-| `method`, `path`, `route` | HTTP-metódus, útvonal, és az útvonal mintája (pl. `/api/v1/devices/{device}`; ismeretlen útvonalnál `null`) |
+| `method`, `path`, `route` | HTTP-metódus (legfeljebb 10 karakter; egy hosszabb, felülírt metódus csonkolódik), útvonal, és az útvonal mintája (pl. `/api/v1/devices/{device}`; ismeretlen útvonalnál `null`) |
 | `query` | Query-paraméterek (JSON) |
 | `request_headers`, `request_body` | Kérésfejlécek (JSON) és kéréstörzs |
 | `response_status`, `response_headers`, `response_body` | Válaszstátusz, -fejlécek (JSON) és -törzs |
@@ -281,8 +282,10 @@ ismeretlen útvonalra érkezők is. A dokumentáció és a health check nem napl
 - **Csonkolás:** az `API_LOG_MAX_BODY_BYTES`-nál (64 KB) nagyobb törzsek csonkolódnak, a végükön a jelölővel:
   `…[truncated, N bytes in total]`.
 - **Nem UTF-8 adatok:** bináris törzs helyett a `[non-UTF-8 body, N bytes]` jelölő kerül be; a fejlécekben, a
-  query-paraméterekben és a user agentben az érvénytelen bájtsorozatok `?`-re cserélődnek. Így ezek a kérések is
-  naplózhatók.
+  query- és űrlapparaméterekben, az útvonalban és a user agentben az érvénytelen bájtsorozatok `?`-re cserélődnek.
+  Így ezek a kérések is naplózhatók.
+- **Nem értelmezhető JSON:** ha a kérés JSON-ként érkezik, de a törzse nem érvényes JSON (így maszkolni sem lehet),
+  helyette a `[unparsable JSON body, N bytes]` jelölő kerül be, hogy egy benne lévő titok se kerüljön a naplóba.
 - **Hibatűrés:** a sor a válasz elküldése után íródik, így nem lassítja a választ. Ha az írás nem sikerül, a hiba az
   alkalmazásnaplóba (`storage/logs/laravel.log`) kerül, a kliens válasza nem változik.
 
@@ -344,10 +347,12 @@ app/
 ├── Exceptions/              Domain kivételek (ApiException: a HTTP-státusz a kivétel típusához tartozik)
 ├── Http/
 │   ├── Controllers/Api/V1/  Vékony controllerek: validált bemenet → szolgáltatás → resource
-│   ├── Middleware/          LogApiTraffic (forgalomnaplózás), AuthenticateApiDocs (Basic Auth)
+│   ├── Middleware/          LogApiTraffic (forgalomnaplózás), RejectInvalidUtf8Input (400 érvénytelen
+│   │                        UTF-8 bemenetre), AuthenticateApiDocs (Basic Auth)
 │   ├── ProblemDetails/      RFC 9457 hibaválaszok: értékobjektum, kivétel-leképezés, renderelés
 │   ├── Requests/Api/V1/     Validáció (FormRequest); közös PUT/PATCH-szemantika
-│   └── Resources/Api/V1/    A JSON-válaszok alakja (API Resource)
+│   ├── Resources/Api/V1/    A JSON-válaszok alakja (API Resource)
+│   └── RequestPath.php      Útvonal-illesztés, amely érvénytelen UTF-8-at tartalmazó útvonalra is működik
 ├── Logging/ApiTraffic/      Naplóbejegyzés építése, maszkolás és csonkolás, naplóíró interfész és implementáció
 ├── Models/                  Eloquent modellek (Device, Contract, ContractDevice pivot, ApiRequestLog)
 ├── OpenApi/                 Scramble-kiterjesztések: a hibaválaszok Problem Details formában dokumentálva
@@ -355,9 +360,10 @@ app/
 └── Services/                Üzleti szabályok (közös, generikus EloquentCrudService alappal)
 ```
 
-Egy kérés útja: `route → FormRequest (validáció) → controller → service (üzleti szabályok) → Eloquent →
-API Resource`. Minden kivétel a `ProblemDetailsRenderer`-en át lesz egységes hibaválasz. A forgalomnaplózó
-middleware a globális middleware-lánc elején áll, így az ismeretlen útvonalak és a hibaválaszok is eljutnak hozzá.
+Egy kérés útja: `route → bemenetszűrés (érvénytelen UTF-8: 400) → FormRequest (validáció) → controller → service
+(üzleti szabályok) → Eloquent → API Resource`. Minden kivétel a `ProblemDetailsRenderer`-en át lesz egységes
+hibaválasz. A forgalomnaplózó middleware a globális middleware-lánc elején áll, így az ismeretlen útvonalak és a
+hibaválaszok is eljutnak hozzá.
 
 Tervezési elvek a kódban:
 
@@ -387,10 +393,11 @@ A minőségkapu a konténerben fut, ebben a sorrendben:
 Tesztek:
 
 - `tests/Feature/Api/V1/`: az eszköz-, a szerződés- és a felvétel/levétel-végpontok, a hibaágakkal együtt;
-- `tests/Feature/Api/`: az egységes hibaformátum és a forgalomnaplózás;
+- `tests/Feature/Api/`: az egységes hibaformátum, a forgalomnaplózás és az érvénytelen UTF-8 bemenet szűrése;
 - `tests/Feature/ApiDocumentationTest.php`: a Basic Auth és a generált OpenAPI-dokumentum;
 - `tests/Feature/Database/`: a migrációk (séma, indexek, idegen kulcsok, visszagörgetés) és a demo seeder;
-- `tests/Unit/`: a maszkolás és csonkolás, valamint a kivételek Problem Details-leképezése.
+- `tests/Unit/`: a maszkolás és csonkolás, a kivételek Problem Details-leképezése, a hibaválasz kódolása és az
+  útvonal-illesztés.
 
 **CI:** a GitHub Actions (`.github/workflows/ci.yml`) minden pushnál és pull requestnél friss gépen futtatja a
 `make check`-et, majd egy füsttesztet. Ez ellenőrzi, hogy a konténerben PHP 8.5 fut, a `/up` és a
@@ -447,3 +454,9 @@ A folyamat dokumentumai:
 - [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md): a tisztázott követelmények (K1–K17) és a tesztelhető elfogadási
   kritériumok (E1–E35);
 - [docs/PLAN.md](docs/PLAN.md): a jóváhagyott implementációs terv, a kritériumok és a tesztek megfeleltetésével.
+
+A második review apró megállapításait publikálás előtt egy külön lánc javította; ennek dokumentumai:
+[docs/review-fixes/TASK.md](docs/review-fixes/TASK.md), [docs/review-fixes/REQUIREMENTS.md](docs/review-fixes/REQUIREMENTS.md)
+és [docs/review-fixes/PLAN.md](docs/review-fixes/PLAN.md). Egy ponton eltér tőlük a megvalósítás: az érvénytelen
+kódolású URL-re (pl. `/api/v1/%FF`) a válasz 400 („Malformed URL.”), nem 404, mert a Laravel `ValidatePathEncoding`
+middleware-je az ilyen URL-t már a routing előtt elutasítja. A válasz így is Problem Details, és a kérés naplózódik.
