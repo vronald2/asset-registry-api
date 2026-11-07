@@ -27,7 +27,7 @@ final class AttachDeviceRequest extends FormRequest
             'device_id' => ['required', 'integer:strict', Rule::exists(Device::class, 'id')],
             /**
              * Serial number of the concrete unit; unique across all contracts (case-insensitive).
-             * @example 5CG2341XYZ
+             * @example SN-EXAMPLE-0001
              */
             'serial_number' => ['required', 'string', 'max:100', Rule::unique(ContractDevice::class, 'serial_number')],
         ];

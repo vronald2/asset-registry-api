@@ -20,7 +20,7 @@ final class ContractRequest extends ResourceWriteRequest
         return [
             /**
              * Unique contract number.
-             * @example SZ-2026-001
+             * @example SZ-2026-010
              */
             'contract_number' => [
                 'required',

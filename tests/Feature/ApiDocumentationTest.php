@@ -128,6 +128,22 @@ final class ApiDocumentationTest extends TestCase
         ]));
     }
 
+    public function testDocumentedExamplesAreFreeInTheDemoData(): void
+    {
+        $this->seed();
+
+        $document = $this->openApiDocument();
+        $example = 'components.schemas.%s.properties.%s.examples.0';
+        $contractNumber = data_get($document, sprintf($example, 'ContractRequest', 'contract_number'));
+        $serialNumber = data_get($document, sprintf($example, 'AttachDeviceRequest', 'serial_number'));
+
+        // "Try it" in the documentation must work on a seeded database too.
+        self::assertSame('SZ-2026-010', $contractNumber);
+        self::assertSame('SN-EXAMPLE-0001', $serialNumber);
+        $this->assertDatabaseMissing('contracts', ['contract_number' => $contractNumber]);
+        $this->assertDatabaseMissing('contract_device', ['serial_number' => $serialNumber]);
+    }
+
     /**
      * @return array<array-key, mixed>
      */
