@@ -13,6 +13,9 @@ use Symfony\Component\HttpFoundation\Response;
  */
 final readonly class ApiTrafficEntryFactory
 {
+    /** Width of the method column; an overridden method (X-HTTP-Method-Override) can be longer. */
+    private const int MAX_METHOD_LENGTH = 10;
+
     private const int MAX_PATH_LENGTH = 2048;
 
     private const int MAX_ROUTE_LENGTH = 255;
@@ -28,7 +31,7 @@ final readonly class ApiTrafficEntryFactory
         $userAgent = $request->userAgent();
 
         return new ApiTrafficEntry(
-            method: $request->getMethod(),
+            method: mb_substr($request->getMethod(), 0, self::MAX_METHOD_LENGTH),
             path: mb_substr($this->sanitizer->text('/' . $request->path()), 0, self::MAX_PATH_LENGTH),
             route: $this->routeUri($request),
             query: $this->sanitizer->data($request->query->all()),
@@ -54,14 +57,19 @@ final readonly class ApiTrafficEntryFactory
 
     private function requestBody(Request $request): ?string
     {
-        // A form submission is logged by its parsed fields, so that the sensitive ones can be masked too.
-        $formFields = $request->isJson() ? [] : $request->request->all();
+        $isJson = $request->isJson();
+
+        // A form submission is logged by its parsed fields, so that the sensitive ones can be masked too. They are
+        // sanitized before encoding: json_encode() would fail on invalid UTF-8.
+        $formFields = $isJson ? [] : $request->request->all();
 
         if ($formFields !== []) {
-            return $this->sanitizer->body((string) json_encode($formFields, JSON_UNESCAPED_UNICODE));
+            return $this->sanitizer->body(
+                (string) json_encode($this->sanitizer->data($formFields), JSON_UNESCAPED_UNICODE),
+            );
         }
 
-        return $this->sanitizer->body($request->getContent());
+        return $this->sanitizer->body($request->getContent(), expectJson: $isJson);
     }
 
     private function responseBody(Response $response): ?string

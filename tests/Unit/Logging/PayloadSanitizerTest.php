@@ -92,6 +92,22 @@ final class PayloadSanitizerTest extends TestCase
         self::assertTrue(mb_check_encoding($body, 'UTF-8'));
     }
 
+    public function testReplacesUnparsableJsonWithMarker(): void
+    {
+        $sanitizer = $this->sanitizer();
+
+        self::assertSame(
+            '[unparsable JSON body, 32 bytes]',
+            $sanitizer->body('{"name":"x","password":"hunter2"', expectJson: true),
+        );
+        self::assertSame(
+            '{"name":"x","password":"***"}',
+            $sanitizer->body('{"name":"x","password":"hunter2"}', expectJson: true),
+        );
+        // Without the JSON expectation a plain text body is kept as it is.
+        self::assertSame('plain text body', $sanitizer->body('plain text body'));
+    }
+
     public function testReplacesNonUtf8BodyWithMarker(): void
     {
         self::assertSame('[non-UTF-8 body, 4 bytes]', $this->sanitizer()->body("\xFF\xFE\x00\x01"));

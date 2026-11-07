@@ -81,9 +81,10 @@ final readonly class PayloadSanitizer
 
     /**
      * Prepares a body for storage: a JSON body is masked (and re-encoded only if something was masked),
-     * every body is truncated to the configured size. A binary (non-UTF-8) body is replaced by a marker.
+     * every body is truncated to the configured size. A binary (non-UTF-8) body, and a body that should be JSON but
+     * cannot be parsed (so it cannot be masked either), is replaced by a marker.
      */
-    public function body(string $content): ?string
+    public function body(string $content, bool $expectJson = false): ?string
     {
         if ($content === '') {
             return null;
@@ -91,6 +92,10 @@ final readonly class PayloadSanitizer
 
         if (! mb_check_encoding($content, 'UTF-8')) {
             return sprintf('[non-UTF-8 body, %d bytes]', strlen($content));
+        }
+
+        if ($expectJson && ! json_validate($content)) {
+            return sprintf('[unparsable JSON body, %d bytes]', strlen($content));
         }
 
         $decoded = json_decode($content, true);

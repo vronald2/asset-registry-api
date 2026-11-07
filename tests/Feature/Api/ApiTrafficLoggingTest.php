@@ -130,6 +130,29 @@ final class ApiTrafficLoggingTest extends TestCase
         self::assertSame('Agent?', $log->user_agent);
     }
 
+    public function testLongOverriddenMethodIsLogged(): void
+    {
+        $response = $this->call('POST', '/api/v1/devices', server: ['HTTP_X_HTTP_METHOD_OVERRIDE' => 'VERSIONCONTROL']);
+
+        $this->assertProblemDetails($response, 405);
+        $log = ApiRequestLog::query()->sole();
+        // Cut to the width of the method column; the override header itself is kept among the request headers.
+        self::assertSame('VERSIONCON', $log->method);
+        self::assertSame(['VERSIONCONTROL'], $log->request_headers['x-http-method-override']);
+    }
+
+    public function testUnparsableJsonBodyIsReplacedWithMarker(): void
+    {
+        $body = '{"name":"x","password":"hunter2"';
+
+        $this->call('POST', '/api/v1/devices', server: ['CONTENT_TYPE' => 'application/json'], content: $body)
+            ->assertUnprocessable();
+
+        $log = ApiRequestLog::query()->sole();
+        self::assertSame(sprintf('[unparsable JSON body, %d bytes]', strlen($body)), $log->request_body);
+        self::assertStringNotContainsString('hunter2', (string) json_encode($log->getAttributes()));
+    }
+
     public function testOversizedBodyIsTruncated(): void
     {
         config(['api-logging.max_body_bytes' => 200]);
