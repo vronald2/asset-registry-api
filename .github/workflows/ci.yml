@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  quality:
+    name: Quality gates and smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v5
+
+      # Builds and starts the Docker stack (migrations included), then runs Pint, PHP_CodeSniffer, Larastan
+      # and PHPUnit inside the app container - the same quality gate as locally.
+      - name: Quality gates
+        run: make check
+
+      - name: Smoke test of the running stack
+        run: |
+          docker compose exec -T app php -r 'exit(PHP_MAJOR_VERSION === 8 && PHP_MINOR_VERSION === 5 ? 0 : 1);'
+          curl --fail --silent --show-error --output /dev/null http://localhost:8080/up
+          curl --fail --silent --show-error http://localhost:8080/api/v1/devices
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://localhost:8080/docs/api)" = 401
+
+      - name: Container logs
+        if: failure()
+        run: docker compose logs --no-color
+
+      - name: Stop the stack
+        if: always()
+        run: docker compose down --volumes
