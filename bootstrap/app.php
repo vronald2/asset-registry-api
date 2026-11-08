@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Http\Middleware\LogApiTraffic;
 use App\Http\Middleware\RejectInvalidUtf8Input;
 use App\Http\Middleware\RejectMalformedJson;
+use App\Http\Middleware\RejectMislabeledJson;
 use App\Http\ProblemDetails\ProblemDetailsRenderer;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -23,7 +24,11 @@ return Application::configure(basePath: dirname(__DIR__))
         // First in the global stack: it sees every request, including the unknown routes and the error responses.
         $middleware->prepend(LogApiTraffic::class);
         // Malformed input is rejected before the route model binding and the validation of the API routes.
-        $middleware->api(prepend: [RejectInvalidUtf8Input::class, RejectMalformedJson::class]);
+        $middleware->api(prepend: [
+            RejectInvalidUtf8Input::class,
+            RejectMalformedJson::class,
+            RejectMislabeledJson::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // Every error of the /api/* endpoints is rendered as an RFC 9457 problem details document.

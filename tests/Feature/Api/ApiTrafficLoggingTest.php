@@ -165,10 +165,36 @@ final class ApiTrafficLoggingTest extends TestCase
             [$body => ''],
             server: ['CONTENT_TYPE' => 'application/x-www-form-urlencoded'],
             content: $body,
-        )->assertUnprocessable();
+        )->assertUnsupportedMediaType();
 
         $log = ApiRequestLog::query()->sole();
         self::assertSame('{"name":"Laptop","password":"***"}', $log->request_body);
+        self::assertStringNotContainsString('hunter2', (string) json_encode($log->getAttributes()));
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function brokenJsonBodies(): iterable
+    {
+        yield 'trailing comma' => ['{"name":"Laptop","password":"hunter2",}'];
+        // The BOM makes it invalid JSON: only the way it starts shows that it is JSON.
+        yield 'leading BOM' => ["\xEF\xBB\xBF" . '{"password":"hunter2","url":"https://example.test/?a=b"}'];
+    }
+
+    #[DataProvider('brokenJsonBodies')]
+    public function testBrokenJsonSentAsFormDoesNotLeakSecrets(string $body): void
+    {
+        $this->call(
+            'POST',
+            '/api/v1/devices',
+            [$body => ''],
+            server: ['CONTENT_TYPE' => 'application/x-www-form-urlencoded'],
+            content: $body,
+        )->assertUnsupportedMediaType();
+
+        $log = ApiRequestLog::query()->sole();
+        self::assertSame(sprintf('[unparsable JSON body, %d bytes]', strlen($body)), $log->request_body);
         self::assertStringNotContainsString('hunter2', (string) json_encode($log->getAttributes()));
     }
 
@@ -180,9 +206,6 @@ final class ApiTrafficLoggingTest extends TestCase
      */
     public static function bodiesSentAsForm(): iterable
     {
-        $invalidJson = '{"name":"Laptop","password":"hunter2",}';
-
-        yield 'invalid JSON' => [$invalidJson, [$invalidJson => ''], '[unparsable JSON body, 39 bytes]', 'hunter2'];
         yield 'text without name=value pairs' => [
             'password: hunter2',
             ['password:_hunter2' => ''],

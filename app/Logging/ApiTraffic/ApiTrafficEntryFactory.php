@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Logging\ApiTraffic;
 
+use App\Http\RequestBody;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Route;
 use Symfony\Component\HttpFoundation\Response;
@@ -66,9 +67,9 @@ final readonly class ApiTrafficEntryFactory
     {
         $content = $request->getContent();
 
-        // JSON is also recognized by its first character, whatever the Content-Type: "curl -d" sends it as a form,
-        // and PHP reads the whole body, secrets included, as one form key. Invalid JSON is replaced by a marker.
-        if ($request->isJson() || $this->startsLikeJson($content)) {
+        // JSON is also recognized by the way it starts, whatever the Content-Type: "curl -d" sends it as a form, and
+        // PHP reads the whole body, secrets included, as one form key. Invalid JSON is replaced by a marker.
+        if ($request->isJson() || RequestBody::looksLikeJson($content)) {
             return $this->sanitizer->body($content, expectJson: true);
         }
 
@@ -79,13 +80,6 @@ final readonly class ApiTrafficEntryFactory
         }
 
         return $this->sanitizer->opaqueBody($content);
-    }
-
-    private function startsLikeJson(string $content): bool
-    {
-        $content = ltrim($content);
-
-        return str_starts_with($content, '{') || str_starts_with($content, '[');
     }
 
     /**

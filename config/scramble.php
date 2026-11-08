@@ -43,7 +43,8 @@ return [
             . ' (`application/problem+json`) with the `type`, `title`, `status`, `detail` and `instance` members.'
             . ' Validation errors (422) add `errors`, the messages by field.'
             . ' A malformed request gets 400: an invalid URL encoding, invalid UTF-8 in the input, or a JSON body that'
-            . ' is neither a JSON object nor empty.',
+            . ' is neither a JSON object nor empty.'
+            . ' A POST, PUT or PATCH body that looks like JSON but is not sent with a JSON Content-Type gets 415.',
             '',
             '## Traffic log',
             '',
