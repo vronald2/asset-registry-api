@@ -21,7 +21,7 @@ több szerződésen is szerepelhet, szerződésenként a konkrét példány gyá
 **Előfeltétel:** Docker (Compose v2-vel) és `make`. Helyi PHP, Composer és MySQL nem kell, minden konténerben fut.
 
 ```bash
-git clone <repo-url> asset-registry-api
+git clone https://github.com/vronald2/asset-registry-api.git asset-registry-api
 cd asset-registry-api
 make up
 ```
@@ -495,3 +495,9 @@ dokumentumai:
 [docs/review-fixes-3/TASK.md](docs/review-fixes-3/TASK.md),
 [docs/review-fixes-3/REQUIREMENTS.md](docs/review-fixes-3/REQUIREMENTS.md) és
 [docs/review-fixes-3/PLAN.md](docs/review-fixes-3/PLAN.md).
+
+A publikálás után egy ötödik lánc beírta a repó valódi címét a „Gyors indítás” szakasz klónozó parancsába. Ennek
+dokumentumai:
+[docs/review-fixes-4/TASK.md](docs/review-fixes-4/TASK.md),
+[docs/review-fixes-4/REQUIREMENTS.md](docs/review-fixes-4/REQUIREMENTS.md) és
+[docs/review-fixes-4/PLAN.md](docs/review-fixes-4/PLAN.md).
