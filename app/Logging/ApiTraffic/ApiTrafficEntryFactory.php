@@ -22,6 +22,9 @@ final readonly class ApiTrafficEntryFactory
 
     private const int MAX_USER_AGENT_LENGTH = 512;
 
+    /** A plain field name, optionally followed by the [key] or [] parts of a nested field. */
+    private const string FORM_FIELD_NAME = '/^[A-Za-z0-9_.-]+(?:\[[A-Za-z0-9_.-]*\])*$/D';
+
     public function __construct(private PayloadSanitizer $sanitizer)
     {
     }
@@ -86,19 +89,28 @@ final readonly class ApiTrafficEntryFactory
     }
 
     /**
-     * Whether every pair of the raw body has the name=value form. PHP also reads other text sent as a form (e.g.
-     * "password: secret") as a field name, which would reach the log unmasked. A multipart body has no raw content
-     * here: PHP has already parsed it.
+     * Whether every pair of the raw body is a name=value pair with a regular field name. PHP also reads other text
+     * sent as a form (e.g. "password: secret" or "Authorization: Basic abc=") as a field name, which would reach the
+     * log unmasked. The raw name is checked because PHP turns the spaces of a parsed name into underscores. A
+     * multipart body has no raw content here: PHP has already parsed it.
      */
     private function isFormEncoded(string $content): bool
     {
         foreach (explode('&', $content) as $pair) {
-            if ($pair !== '' && ! str_contains($pair, '=')) {
+            if ($pair !== '' && ! $this->isFormField($pair)) {
                 return false;
             }
         }
 
         return true;
+    }
+
+    private function isFormField(string $pair): bool
+    {
+        $nameLength = strpos($pair, '=');
+
+        return $nameLength !== false
+            && preg_match(self::FORM_FIELD_NAME, urldecode(substr($pair, 0, $nameLength))) === 1;
     }
 
     private function responseBody(Response $response): ?string

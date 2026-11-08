@@ -173,20 +173,45 @@ final class ApiTrafficLoggingTest extends TestCase
     }
 
     /**
-     * The form fields are given the way PHP parses such a body: the whole text becomes one field name, with its
-     * spaces turned into underscores.
+     * The form fields are given the way PHP parses such a body: the whole text up to the first "=" becomes one field
+     * name, with its spaces turned into underscores.
      *
-     * @return iterable<string, array{string, array<string, string>, string}>
+     * @return iterable<string, array{string, array<string, string>, string, string}>
      */
     public static function bodiesSentAsForm(): iterable
     {
         $invalidJson = '{"name":"Laptop","password":"hunter2",}';
 
-        yield 'invalid JSON' => [$invalidJson, [$invalidJson => ''], '[unparsable JSON body, 39 bytes]'];
+        yield 'invalid JSON' => [$invalidJson, [$invalidJson => ''], '[unparsable JSON body, 39 bytes]', 'hunter2'];
         yield 'text without name=value pairs' => [
             'password: hunter2',
             ['password:_hunter2' => ''],
             '[unparsed body, 17 bytes]',
+            'hunter2',
+        ];
+        yield 'header line with a Base64 value' => [
+            'Authorization: Basic dXNlcjpwYXNzd29yZA==',
+            ['Authorization:_Basic_dXNlcjpwYXNzd29yZA' => '='],
+            '[unparsed body, 41 bytes]',
+            'dXNlcjpwYXNzd29yZA',
+        ];
+        yield 'field name with a space' => [
+            'password hunter2=x',
+            ['password_hunter2' => 'x'],
+            '[unparsed body, 18 bytes]',
+            'hunter2',
+        ];
+        yield 'field name ending with a line break' => [
+            'hunter2%0A=x',
+            ["hunter2\n" => 'x'],
+            '[unparsed body, 12 bytes]',
+            'hunter2',
+        ];
+        yield 'field name with an unclosed bracket' => [
+            'a[hunter2=x',
+            ['a_hunter2' => 'x'],
+            '[unparsed body, 11 bytes]',
+            'hunter2',
         ];
     }
 
@@ -194,8 +219,12 @@ final class ApiTrafficLoggingTest extends TestCase
      * @param array<string, string> $parsedFields
      */
     #[DataProvider('bodiesSentAsForm')]
-    public function testBodySentAsFormDoesNotLeakSecrets(string $body, array $parsedFields, string $expected): void
-    {
+    public function testBodySentAsFormDoesNotLeakSecrets(
+        string $body,
+        array $parsedFields,
+        string $expected,
+        string $secret,
+    ): void {
         $this->call(
             'POST',
             '/api/v1/devices',
@@ -206,7 +235,44 @@ final class ApiTrafficLoggingTest extends TestCase
 
         $log = ApiRequestLog::query()->sole();
         self::assertSame($expected, $log->request_body);
+        self::assertStringNotContainsString($secret, (string) json_encode($log->getAttributes()));
+    }
+
+    public function testRealFormRequestIsLoggedMasked(): void
+    {
+        $fields = [...self::DEVICE_PAYLOAD, 'password' => 'hunter2', 'credentials' => ['password' => 'hunter2']];
+
+        // http_build_query() URL-encodes the brackets of the nested field, like a browser.
+        $this->call(
+            'POST',
+            '/api/v1/devices',
+            $fields,
+            server: ['CONTENT_TYPE' => 'application/x-www-form-urlencoded'],
+            content: http_build_query($fields),
+        )->assertCreated();
+
+        $log = ApiRequestLog::query()->sole();
+        self::assertSame(
+            [...self::DEVICE_PAYLOAD, 'password' => '***', 'credentials' => ['password' => '***']],
+            json_decode((string) $log->request_body, true),
+        );
         self::assertStringNotContainsString('hunter2', (string) json_encode($log->getAttributes()));
+    }
+
+    public function testFormFieldNamesWithBracketsDotsAndDashesAreLogged(): void
+    {
+        $fields = ['tags' => ['a'], 'meta' => ['a' => ['b' => 'c']], 'x_y-z' => '1'];
+
+        // Written by hand: http_build_query() would number the items of "tags[]".
+        $this->call(
+            'POST',
+            '/api/v1/devices',
+            $fields,
+            server: ['CONTENT_TYPE' => 'application/x-www-form-urlencoded'],
+            content: 'tags%5B%5D=a&meta%5Ba%5D%5Bb%5D=c&x.y-z=1',
+        )->assertUnprocessable();
+
+        self::assertSame($fields, json_decode((string) ApiRequestLog::query()->sole()->request_body, true));
     }
 
     /**
