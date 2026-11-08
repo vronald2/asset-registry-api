@@ -97,11 +97,11 @@ final readonly class PayloadSanitizer
             return $this->marker('non-UTF-8', $content);
         }
 
-        if ($expectJson && ! json_validate($content)) {
+        $decoded = json_decode($content, true);
+
+        if ($expectJson && json_last_error() !== JSON_ERROR_NONE) {
             return $this->marker('unparsable JSON', $content);
         }
-
-        $decoded = json_decode($content, true);
 
         if (is_array($decoded)) {
             $masked = $this->data($decoded);

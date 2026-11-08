@@ -47,6 +47,8 @@ final class RejectMalformedJsonTest extends TestCase
     {
         yield 'syntax error' => ['{"name": "Laptop", "manufacturer": "Dell", "model": "X1"'];
         yield 'invalid UTF-8' => ["{\"name\": \"Laptop\xFF\", \"manufacturer\": \"Dell\", \"model\": \"X1\"}"];
+        // Correct syntax, but PHP cannot turn a key starting with a NUL character into an object property.
+        yield 'key starting with NUL' => ['{"\u0000a": 1}'];
     }
 
     #[DataProvider('malformedJsonBodies')]

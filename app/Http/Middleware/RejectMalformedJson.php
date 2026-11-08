@@ -36,11 +36,11 @@ final readonly class RejectMalformedJson
             return $next($request);
         }
 
-        if (! json_validate($content)) {
+        $data = json_decode($content);
+
+        if (json_last_error() !== JSON_ERROR_NONE) {
             throw new BadRequestHttpException('The request body is not valid JSON.');
         }
-
-        $data = json_decode($content);
 
         if (! $data instanceof stdClass && $data !== null && $data !== []) {
             throw new BadRequestHttpException('The request body must be a JSON object.');
