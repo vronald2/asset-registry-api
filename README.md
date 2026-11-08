@@ -495,3 +495,9 @@ dokumentumai:
 [docs/review-fixes-3/TASK.md](docs/review-fixes-3/TASK.md),
 [docs/review-fixes-3/REQUIREMENTS.md](docs/review-fixes-3/REQUIREMENTS.md) és
 [docs/review-fixes-3/PLAN.md](docs/review-fixes-3/PLAN.md).
+
+A publikálás után egy ötödik lánc beírta a repó valódi címét a „Gyors indítás” szakasz klónozó parancsába. Ennek
+dokumentumai:
+[docs/review-fixes-4/TASK.md](docs/review-fixes-4/TASK.md),
+[docs/review-fixes-4/REQUIREMENTS.md](docs/review-fixes-4/REQUIREMENTS.md) és
+[docs/review-fixes-4/PLAN.md](docs/review-fixes-4/PLAN.md).
