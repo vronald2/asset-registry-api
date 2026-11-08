@@ -204,7 +204,7 @@ reprodukálható felállítás (Docker, migrációk) kiemelten fontos.
   csonkolódnak (konfigurálható).
 - A tesztek a Docker-környezetben, külön MySQL tesztadatbázison futnak (nem SQLite-on), hogy az indexeket és az idegen
   kulcsokat is ellenőrizzék.
-- A projekt helye `/Users/vronald/Projects/asset-registry-api`, az alapág `main`. A nyilvános GitHub repó létrehozása
+- A projekt helye `Projects/asset-registry-api`, az alapág `main`. A nyilvános GitHub repó létrehozása
   és a push a lezáráskor, a felhasználó kifejezett kérésére történik.
 - A kiegészítő csomagok (OpenAPI-generátor, Larastan, PHPCS) Laravel 13-mal és PHP 8.5-tel kompatibilis, aktuális
   verziók; a konkrét választást a terv rögzíti.
