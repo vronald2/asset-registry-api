@@ -192,7 +192,9 @@ A szerződés lekérdezésének válasza:
 
 A listák lapozottak: `page` (1-től) és `per_page` (1–100, alapértelmezés 15), `id` szerint növekvő sorrendben. A
 válasz a `data` mellett `links` (`first`, `last`, `prev`, `next`) és `meta` (`current_page`, `per_page`, `total` stb.)
-objektumot is tartalmaz; a linkek megtartják a query-paramétereket.
+objektumot is tartalmaz. A linkek csak a `page` és a `per_page` paramétert viszik tovább, a többi query-paramétert nem,
+így a query-ben küldött titkot a válasz nem adja vissza, és a válasz törzsén át a naplóba sem kerül. A napló `query`
+oszlopára a mezőnév szerinti maszkolás érvényes (lásd a Naplózás szakaszt).
 
 ```bash
 curl -s 'http://localhost:8080/api/v1/devices?page=2&per_page=5'
@@ -409,7 +411,8 @@ A minőségkapu a konténerben fut, ebben a sorrendben:
 
 Tesztek:
 
-- `tests/Feature/Api/V1/`: az eszköz-, a szerződés- és a felvétel/levétel-végpontok, a hibaágakkal együtt;
+- `tests/Feature/Api/V1/`: az eszköz-, a szerződés- és a felvétel/levétel-végpontok a hibaágakkal együtt, valamint a
+  lapozási linkek;
 - `tests/Feature/Api/`: az egységes hibaformátum, a forgalomnaplózás, valamint az érvénytelen UTF-8 bemenet, a hibás
   JSON-törzs és a rossz Content-Type-pal küldött JSON szűrése;
 - `tests/Feature/ApiDocumentationTest.php`: a Basic Auth és a generált OpenAPI-dokumentum;
@@ -501,3 +504,9 @@ dokumentumai:
 [docs/review-fixes-4/TASK.md](docs/review-fixes-4/TASK.md),
 [docs/review-fixes-4/REQUIREMENTS.md](docs/review-fixes-4/REQUIREMENTS.md) és
 [docs/review-fixes-4/PLAN.md](docs/review-fixes-4/PLAN.md).
+
+A `main` élő tesztje ezután talált egy szivárgást: a lapozási linkek visszaadták a teljes query stringet, így a query-ben
+küldött titok a válasz törzsén át a naplóba került. Ezt egy hatodik lánc javította. Ennek dokumentumai:
+[docs/review-fixes-5/TASK.md](docs/review-fixes-5/TASK.md),
+[docs/review-fixes-5/REQUIREMENTS.md](docs/review-fixes-5/REQUIREMENTS.md) és
+[docs/review-fixes-5/PLAN.md](docs/review-fixes-5/PLAN.md).
