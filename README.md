@@ -21,7 +21,7 @@ több szerződésen is szerepelhet, szerződésenként a konkrét példány gyá
 **Előfeltétel:** Docker (Compose v2-vel) és `make`. Helyi PHP, Composer és MySQL nem kell, minden konténerben fut.
 
 ```bash
-git clone <repo-url> asset-registry-api
+git clone https://github.com/vronald2/asset-registry-api.git asset-registry-api
 cd asset-registry-api
 make up
 ```
