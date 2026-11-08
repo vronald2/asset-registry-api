@@ -128,11 +128,11 @@ final readonly class PayloadSanitizer
 
     /**
      * A body that is neither JSON nor form data (e.g. text/plain): its secrets cannot be recognized, so only its size
-     * is stored.
+     * is stored. A body of only whitespace counts as empty, like in body().
      */
     public function opaqueBody(string $content): ?string
     {
-        if ($content === '') {
+        if (trim($content) === '') {
             return null;
         }
 

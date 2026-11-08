@@ -144,6 +144,9 @@ final class PayloadSanitizerTest extends TestCase
         $sanitizer = $this->sanitizer();
 
         self::assertNull($sanitizer->opaqueBody(''));
+        // Like in body(), a body of only whitespace counts as empty.
+        self::assertNull($sanitizer->opaqueBody("\n"));
+        self::assertNull($sanitizer->opaqueBody(" \t"));
         self::assertSame('[unparsed body, 16 bytes]', $sanitizer->opaqueBody('password=hunter2'));
         self::assertSame('[non-UTF-8 body, 2 bytes]', $sanitizer->opaqueBody("\xFF\xFE"));
     }
