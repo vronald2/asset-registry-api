@@ -20,13 +20,16 @@ abstract readonly class EloquentCrudService
     abstract protected function modelClass(): string;
 
     /**
-     * A page of the resources, ordered by their identifier; the pagination links keep the query string.
+     * A page of the resources, ordered by their identifier.
+     *
+     * The pagination links carry only the page number and the page size. The rest of the query string would echo
+     * whatever the client sent into the response and, through it, into the request log, secrets included.
      *
      * @return LengthAwarePaginator<int, TModel>
      */
     public function paginate(int $perPage): LengthAwarePaginator
     {
-        return $this->modelClass()::query()->orderBy('id')->paginate($perPage)->withQueryString();
+        return $this->modelClass()::query()->orderBy('id')->paginate($perPage)->appends(['per_page' => $perPage]);
     }
 
     /**

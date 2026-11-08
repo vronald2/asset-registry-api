@@ -8,6 +8,7 @@ use App\Http\ProblemDetails\ProblemDetails;
 use App\Logging\ApiTraffic\ApiTrafficEntry;
 use App\Logging\ApiTraffic\ApiTrafficLogger;
 use App\Models\ApiRequestLog;
+use App\Models\Contract;
 use App\Models\Device;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Log;
@@ -100,6 +101,28 @@ final class ApiTrafficLoggingTest extends TestCase
         self::assertSame('Dell Latitude 5440', $body['name']);
         self::assertSame('***', $body['password']);
         self::assertSame(['api_token' => '***', 'Secret' => '***'], $body['credentials']);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function listEndpoints(): iterable
+    {
+        yield 'devices' => ['/api/v1/devices'];
+        yield 'contracts' => ['/api/v1/contracts'];
+    }
+
+    #[DataProvider('listEndpoints')]
+    public function testSecretInTheQueryStringIsNotLoggedThroughPaginationLinks(string $endpoint): void
+    {
+        Device::factory()->count(5)->create();
+        Contract::factory()->count(5)->create();
+
+        $this->getJson($endpoint . '?api_token=secret-query&page=2&per_page=2')->assertOk();
+
+        $log = ApiRequestLog::query()->sole();
+        self::assertStringNotContainsString('secret-query', (string) json_encode($log->getAttributes()));
+        self::assertSame('***', $log->query['api_token']);
     }
 
     public function testBasicAuthCredentialsAreMasked(): void
