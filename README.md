@@ -504,3 +504,9 @@ dokumentumai:
 [docs/review-fixes-4/TASK.md](docs/review-fixes-4/TASK.md),
 [docs/review-fixes-4/REQUIREMENTS.md](docs/review-fixes-4/REQUIREMENTS.md) és
 [docs/review-fixes-4/PLAN.md](docs/review-fixes-4/PLAN.md).
+
+A `main` élő tesztje ezután talált egy szivárgást: a lapozási linkek visszaadták a teljes query stringet, így a query-ben
+küldött titok a válasz törzsén át a naplóba került. Ezt egy hatodik lánc javította. Ennek dokumentumai:
+[docs/review-fixes-5/TASK.md](docs/review-fixes-5/TASK.md),
+[docs/review-fixes-5/REQUIREMENTS.md](docs/review-fixes-5/REQUIREMENTS.md) és
+[docs/review-fixes-5/PLAN.md](docs/review-fixes-5/PLAN.md).
